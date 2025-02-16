@@ -1,0 +1,550 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-02-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+devtools::install_github("Reilly-ConceptsCognitionLab/USAPresidentialDebates")
+```
+```{r}
+# Load required libraries
+library(USAPresidentialDebates)
+library(tidyverse)
+library(tidytext)
+```
+```{r}
+# Basic exploration of the dataset
+str(debates)
+```
+
+```{r}
+
+# 1. Basic summary of debates per year
+debate_summary <- debates %>%
+  group_by(Year) %>%
+  summarise(
+    n_debates = n_distinct(event_id),
+    n_speakers = n_distinct(speaker_names_raw)
+  )
+
+print(debate_summary)
+```
+
+```{r}
+
+# Basic summary of debates per year
+debate_summary <- debates %>%
+  group_by(Year) %>%
+  summarise(
+    n_debates = n_distinct(event_id),
+    n_speakers = n_distinct(speaker_names_raw)
+  )
+
+# Speaker analysis
+speaker_stats <- debates %>%
+  group_by(speaker_names_raw) %>%
+  summarise(
+    total_speeches = n(),
+    total_words = sum(str_count(rawtext, '\\w+')),
+    avg_words_per_speech = mean(str_count(rawtext, '\\w+'))
+  ) %>%
+  arrange(desc(total_speeches))
+
+# Word frequency analysis
+debate_words <- debates %>%
+  unnest_tokens(word, rawtext) %>%
+  anti_join(stop_words) %>%
+  count(Year, word, sort = TRUE) %>%
+  group_by(Year)
+
+# Timeline visualization
+debate_timeline <- ggplot(debate_summary, aes(x = Year, y = n_debates)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  labs(
+    title = "Number of Presidential Debates Over Time",
+    x = "Year",
+    y = "Number of Debates"
+  )
+
+# Let's add some interesting economic context
+economic_context <- debates %>%
+  group_by(Year) %>%
+  summarise(
+    avg_inflation = mean(InflationRate),
+    avg_gdp_growth = mean(GDPgrowth, na.rm = TRUE),
+    avg_age_diff = mean(AgeDiff)
+  ) %>%
+  arrange(Year)
+
+# Print results
+print("Debate Summary by Year:")
+print(debate_summary)
+
+print("\nTop Speaking Participants:")
+print(head(speaker_stats))
+
+print("\nEconomic Context:")
+print(economic_context)
+
+# Display the timeline plot
+print(debate_timeline)
+```
+
+```{r}
+# Full speaker analysis with all speakers
+speaker_stats <- debates %>%
+  group_by(speaker_names_raw) %>%
+  summarise(
+    total_speeches = n(),
+    total_words = sum(str_count(rawtext, '\\w+')),
+    avg_words_per_speech = mean(str_count(rawtext, '\\w+'))
+  ) %>%
+  arrange(desc(total_speeches))
+
+# Print all results, not just head()
+print("All Speaking Participants:")
+print(speaker_stats, n = Inf)  # n = Inf shows all rows
+
+# We can also get a quick count of unique speakers
+n_speakers <- n_distinct(debates$speaker_names_raw)
+print(paste("\nTotal number of unique speakers:", n_speakers))
+
+# Optional: Let's also see the distribution of speeches by party
+party_stats <- debates %>%
+  group_by(Party) %>%
+  summarise(
+    total_speeches = n(),
+    unique_speakers = n_distinct(speaker_names_raw)
+  )
+
+print("\nParty Statistics:")
+print(party_stats)
+```
+```{r}
+# Load additional required packages
+library(USAPresidentialDebates)
+library(tidyverse)
+library(tidytext)
+library(textdata)  # for additional sentiment lexicons
+
+# Basic sentiment analysis using multiple lexicons
+debate_sentiment <- debates %>%
+  unnest_tokens(word, rawtext) %>%
+  inner_join(get_sentiments("bing")) %>%  # bing lexicon categorizes words as positive/negative
+  count(Year, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment_ratio = (positive - negative) / (positive + negative))
+
+# More nuanced analysis using NRC lexicon for specific emotions
+debate_emotions <- debates %>%
+  unnest_tokens(word, rawtext) %>%
+  inner_join(get_sentiments("nrc")) %>%
+  count(Year, sentiment) %>%
+  group_by(Year) %>%
+  mutate(proportion = n / sum(n))
+
+# Create visualizations
+
+# 1. Overall sentiment ratio over time
+sentiment_plot <- ggplot(debate_sentiment, aes(x = Year, y = sentiment_ratio)) +
+  geom_line(color = "blue") +
+  geom_point() +
+  geom_smooth(method = "loess", se = TRUE) +
+  theme_minimal() +
+  labs(
+    title = "Overall Sentiment in Presidential Debates Over Time",
+    x = "Year",
+    y = "Sentiment Ratio (Positive - Negative) / Total",
+    caption = "Based on Bing lexicon"
+  )
+
+# 2. Emotion distribution over time
+emotion_plot <- ggplot(debate_emotions, 
+                      aes(x = Year, y = proportion, fill = sentiment)) +
+  geom_area(position = "stack") +
+  theme_minimal() +
+  labs(
+    title = "Distribution of Emotions in Presidential Debates",
+    x = "Year",
+    y = "Proportion of Emotional Words",
+    fill = "Emotion"
+  ) +
+  theme(legend.position = "right")
+
+# 3. Analysis by party
+party_sentiment <- debates %>%
+  unnest_tokens(word, rawtext) %>%
+  inner_join(get_sentiments("bing")) %>%
+  group_by(Year, Party) %>%
+  summarise(
+    positive = sum(sentiment == "positive"),
+    negative = sum(sentiment == "negative"),
+    sentiment_ratio = (positive - negative) / (positive + negative)
+  )
+
+party_sentiment_plot <- ggplot(party_sentiment, 
+                             aes(x = Year, y = sentiment_ratio, color = Party)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  labs(
+    title = "Sentiment Analysis by Party Over Time",
+    x = "Year",
+    y = "Sentiment Ratio",
+    color = "Party"
+  )
+
+# Print summary statistics
+print("Average sentiment ratio by decade:")
+debate_sentiment %>%
+  mutate(decade = floor(Year/10) * 10) %>%
+  group_by(decade) %>%
+  summarise(
+    avg_sentiment = mean(sentiment_ratio),
+    sd_sentiment = sd(sentiment_ratio)
+  ) %>%
+  print()
+
+# Display plots
+print(sentiment_plot)
+print(emotion_plot)
+print(party_sentiment_plot)
+
+# Additional analysis: Most emotional words by period
+emotional_words <- debates %>%
+  unnest_tokens(word, rawtext) %>%
+  inner_join(get_sentiments("nrc")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  group_by(sentiment) %>%
+  slice_max(n, n = 10)
+
+print("\nTop emotional words across all debates:")
+print(emotional_words)
+```
+
+```{r}
+# Analyze anger by speaker
+angry_speakers <- debates %>%
+  unnest_tokens(word, rawtext) %>%
+  inner_join(get_sentiments("nrc") %>% 
+            filter(sentiment == "anger")) %>%
+  group_by(speaker_names_raw) %>%
+  summarise(
+    anger_words = n(),
+    total_words = n_distinct(word),
+    anger_ratio = (anger_words / total_words) * 100
+  ) %>%
+  arrange(desc(anger_ratio))
+
+# Print results
+print("Speakers Ranked by Anger Content:")
+print(angry_speakers, n = Inf)
+
+# Create visualization
+ggplot(head(angry_speakers, 10), aes(x = reorder(speaker_names_raw, anger_ratio), y = anger_ratio)) +
+  geom_bar(stat = "identity", fill = "red") +
+  coord_flip() +
+  theme_minimal() +
+  labs(
+    title = "Top 10 'Angriest' Debate Speakers",
+    x = "Speaker",
+    y = "Anger Word Ratio (%)"
+  )
+```
+
+```{r}
+# First, let's calculate some basic vocabulary complexity metrics
+library(quanteda)
+library(quanteda.textstats)
+
+# Prepare the text by debate
+debate_complexity <- debates %>%
+  group_by(Year, event_id) %>%
+  summarise(
+    full_text = paste(rawtext, collapse = " "),
+    # Average word length
+    avg_word_length = mean(nchar(unlist(strsplit(rawtext, " ")))),
+    # Unique words ratio (lexical diversity)
+    unique_words = n_distinct(unlist(strsplit(rawtext, " "))),
+    total_words = n(),
+    lexical_diversity = unique_words/total_words
+  ) %>%
+  ungroup()
+
+# Create corpus for more advanced metrics
+debate_corpus <- corpus(
+  debate_complexity$full_text, 
+  docvars = data.frame(
+    Year = debate_complexity$Year,
+    event_id = debate_complexity$event_id
+  )
+)
+
+# Calculate readability metrics
+readability_scores <- textstat_readability(
+  debate_corpus,
+  measures = c("Flesch.Kincaid", "Dale.Chall", "SMOG")
+)
+
+# Combine with our original data
+debate_complexity <- debate_complexity %>%
+  bind_cols(readability_scores[,2:4])
+
+# Create visualization of trends
+ggplot(debate_complexity, aes(x = Year, y = Flesch.Kincaid)) +
+  geom_point() +
+  geom_smooth(method = "loess") +
+  theme_minimal() +
+  labs(
+    title = "Presidential Debate Reading Level Over Time",
+    y = "Flesch-Kincaid Grade Level",
+    x = "Year"
+  )
+
+# Print summary by decade
+decade_summary <- debate_complexity %>%
+  mutate(decade = floor(Year/10) * 10) %>%
+  group_by(decade) %>%
+  summarise(
+    avg_grade_level = mean(Flesch.Kincaid),
+    avg_lexical_diversity = mean(lexical_diversity),
+    avg_word_length = mean(avg_word_length)
+  )
+
+print("Linguistic Complexity by Decade:")
+print(decade_summary)
+
+# You might also want to see which candidates used the most complex language
+speaker_complexity <- debates %>%
+  group_by(speaker_names_raw) %>%
+  summarise(
+    full_text = paste(rawtext, collapse = " ")
+  ) %>%
+  mutate(
+    readability = textstat_readability(
+      corpus(full_text),
+      measures = c("Flesch.Kincaid")
+    )$Flesch.Kincaid
+  ) %>%
+  arrange(desc(readability))
+
+print("\nSpeakers Ranked by Language Complexity:")
+print(speaker_complexity)
+```
+```{r}
+# Calculate reading level metrics by debate
+debate_complexity <- debates %>%
+  group_by(Year, event_id) %>%
+  summarise(
+    full_text = paste(rawtext, collapse = " "),
+    # Average word length
+    avg_word_length = mean(nchar(unlist(strsplit(rawtext, " ")))),
+    # Word count
+    word_count = n(),
+    # Sentence count (rough approximation using periods)
+    sentence_count = str_count(full_text, "[.!?]+"),
+    # Syllable count (rough approximation)
+    syllable_count = str_count(full_text, "[aeiouy]+")
+  ) %>%
+  # Calculate Flesch-Kincaid Grade Level
+  mutate(
+    flesch_kincaid = 0.39 * (word_count/sentence_count) + 
+                     11.8 * (syllable_count/word_count) - 15.59
+  ) %>%
+  arrange(Year)
+
+# Print summary by decade
+decade_summary <- debate_complexity %>%
+  mutate(decade = floor(Year/10) * 10) %>%
+  group_by(decade) %>%
+  summarise(
+    avg_grade_level = mean(flesch_kincaid),
+    avg_word_length = mean(avg_word_length),
+    words_per_sentence = mean(word_count/sentence_count)
+  )
+
+print("Reading Level by Decade:")
+print(decade_summary)
+
+# Visualization
+ggplot(debate_complexity, aes(x = Year, y = flesch_kincaid)) +
+  geom_point() +
+  geom_smooth(method = "loess") +
+  theme_minimal() +
+  labs(
+    title = "Presidential Debate Reading Level Over Time",
+    y = "Flesch-Kincaid Grade Level",
+    x = "Year"
+  )
+
+# Calculate by speaker
+speaker_complexity <- debates %>%
+  group_by(speaker_names_raw) %>%
+  summarise(
+    word_count = n(),
+    avg_word_length = mean(nchar(unlist(strsplit(rawtext, " ")))),
+    sentence_count = sum(str_count(rawtext, "[.!?]+")),
+    syllable_count = sum(str_count(rawtext, "[aeiouy]+"))
+  ) %>%
+  mutate(
+    flesch_kincaid = 0.39 * (word_count/sentence_count) + 
+                     11.8 * (syllable_count/word_count) - 15.59
+  ) %>%
+  arrange(desc(flesch_kincaid))
+
+print("\nSpeakers Ranked by Language Complexity:")
+print(speaker_complexity)
+```
+
+```{r}
+# Create tf-idf analysis by speaker
+speaker_distinctive_words <- debates %>%
+  unnest_tokens(word, rawtext) %>%
+  anti_join(stop_words) %>%  # Remove common stop words
+  count(speaker_names_raw, word) %>%  # Count words by speaker
+  bind_tf_idf(word, speaker_names_raw, n) %>%  # Calculate tf-idf
+  group_by(speaker_names_raw) %>%
+  arrange(desc(tf_idf)) %>%
+  slice_max(order_by = tf_idf, n = 10) %>%  # Get top 10 distinctive words per speaker
+  ungroup()
+
+# Print results for each speaker
+print("Most distinctive words by speaker:")
+speaker_distinctive_words %>%
+  arrange(speaker_names_raw, desc(tf_idf)) %>%
+  print(n = Inf)
+
+# Create visualization for top speakers
+top_speakers <- c("OBAMA", "TRUMP", "BUSH_W", "KERRY", "CLINTON_HILLARY")
+
+ggplot(
+  speaker_distinctive_words %>% 
+    filter(speaker_names_raw %in% top_speakers),
+  aes(x = reorder_within(word, tf_idf, speaker_names_raw),
+      y = tf_idf,
+      fill = speaker_names_raw)
+) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~speaker_names_raw, scales = "free_y") +
+  coord_flip() +
+  scale_x_reordered() +
+  theme_minimal() +
+  labs(
+    title = "Most Distinctive Words by Presidential Candidate",
+    x = "Word",
+    y = "tf-idf"
+  )
+```
+
+```{r}
+# Create custom stop words list for names and places
+custom_stops <- c(
+  "hillary", "donald", "trump", "obama", "romney", "mccain", "clinton", "bush",
+  "kerry", "biden", "gore", "chris", "joe", "lester", "mosul", "isis",
+  "iraq", "afghanistan", "pakistan", "texas", "laden", "hussein", "saddam"
+)
+
+# Updated analysis removing proper nouns
+speaker_distinctive_words <- debates %>%
+  unnest_tokens(word, rawtext) %>%
+  anti_join(stop_words) %>%  # Remove common stop words
+  filter(!word %in% custom_stops) %>%  # Remove our custom stops
+  # Remove words that start with capital letters (likely proper nouns)
+  filter(!str_detect(word, "^[A-Z]")) %>%
+  count(speaker_names_raw, word) %>%
+  bind_tf_idf(word, speaker_names_raw, n) %>%
+  group_by(speaker_names_raw) %>%
+  arrange(desc(tf_idf)) %>%
+  slice_max(order_by = tf_idf, n = 10) %>%
+  ungroup()
+
+# Create visualization for all candidates
+ggplot(speaker_distinctive_words,
+  aes(x = reorder_within(word, tf_idf, speaker_names_raw),
+      y = tf_idf,
+      fill = speaker_names_raw)
+) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~speaker_names_raw, scales = "free_y", ncol = 3) +  # Adjust layout
+  coord_flip() +
+  scale_x_reordered() +
+  theme_minimal() +
+  theme(
+    strip.text = element_text(size = 8),  # Make speaker names smaller
+    axis.text = element_text(size = 7)    # Make word labels smaller
+  ) +
+  labs(
+    title = "Most Distinctive Words by Presidential Candidate",
+```
+
+```{r}
+# Create a function to plot 5 candidates
+plot_candidate_group <- function(data, candidates) {
+  data %>%
+    filter(speaker_names_raw %in% candidates) %>%
+    ggplot(aes(x = reorder_within(word, tf_idf, speaker_names_raw),
+               y = tf_idf,
+               fill = speaker_names_raw)) +
+    geom_col(show.legend = FALSE) +
+    facet_wrap(~speaker_names_raw, scales = "free_y", ncol = 3) +
+    coord_flip() +
+    scale_x_reordered() +
+    theme_minimal() +
+    theme(
+      strip.text = element_text(size = 14, face = "bold"),
+      axis.text = element_text(size = 12),
+      plot.title = element_text(size = 16, face = "bold"),
+      panel.grid.minor = element_blank(),
+      panel.spacing = unit(1, "cm")
+    ) +
+    labs(
+      title = "Most Distinctive Words by Presidential Candidate",
+      subtitle = paste("Group", candidates[1], "to", candidates[length(candidates)]),
+      x = "Word",
+      y = "tf-idf"
+    )
+}
+
+# Get all unique candidates
+all_candidates <- unique(speaker_distinctive_words$speaker_names_raw)
+
+# Create groups of 5 candidates
+candidate_groups <- split(all_candidates, ceiling(seq_along(all_candidates)/5))
+
+# Create and print plots for each group
+for(i in seq_along(candidate_groups)) {
+  print(plot_candidate_group(speaker_distinctive_words, candidate_groups[[i]]))
+}
+```
+
+```{r}
+subtitle = "Excluding proper nouns and names",
+    x = "Word",
+    y = "tf-idf"
+  )
+
+# Print the words for each candidate
+print("Most distinctive words by speaker (excluding proper nouns):")
+speaker_distinctive_words %>%
+  arrange(speaker_names_raw, desc(tf_idf)) %>%
+  print(n = Inf)
+```
+```{r}
+# Updated visualization with better readability
+ggplot(speaker_distinctive_words,
+  aes(x = reorder_within(word, tf_idf, speaker_names_raw),
+      y = tf_idf,
+      fill = speaker_names_raw)
+) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~speaker_names_raw, scales = "free_y", ncol = 3) +
+  coord_flip() +
+
+

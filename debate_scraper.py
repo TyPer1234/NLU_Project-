@@ -7,9 +7,11 @@ from datetime import datetime
 # Constants
 URL = "https://www.presidency.ucsb.edu/documents/presidential-documents-archive-guidebook/presidential-campaigns-debates-and-endorsements-0"
 SAVE_DIR = "data_script"
+PRESIDENTIAL_DIR = os.path.join(SAVE_DIR, "presidential")
 
-# Create output directory
+# Create output directories
 os.makedirs(SAVE_DIR, exist_ok=True)
+os.makedirs(PRESIDENTIAL_DIR, exist_ok=True)
 
 def fetch_debate_links():
     """Fetch debate transcript links from the UCSB website."""
@@ -50,22 +52,28 @@ def fetch_debate_links():
     return link_dict
 
 def format_filename(debate_name, debate_date):
-    """Format filenames for saving transcripts."""
+    """Format filenames for saving transcripts with year_month_day format."""
     try:
         date_obj = datetime.strptime(debate_date, "%B %d, %Y")
-        formatted_date = date_obj.strftime("%m_%d_%Y")
+        formatted_date = date_obj.strftime("%Y_%m_%d")  # Year-Month-Day format
     except ValueError:
         print(f"Skipping invalid date: {debate_date}")
         return None  
 
-    suffix = "vp" if "Vice Presidential" in debate_name else (
-        "rpd" if "Republican" in debate_name else (
-            "dcd" if "Democratic" in debate_name else "pb"
-        )
-    )
+    # Categorization logic
+    if "Vice" in debate_name:
+        suffix = "vp"
+    elif debate_name.startswith("Presidential"):
+        suffix = "pd"
+    elif "Republican" in debate_name:
+        suffix = "rpd"
+    elif "Democratic" in debate_name:
+        suffix = "dcd"
+    else:
+        suffix = "unknown"
 
     filename = f"{formatted_date}_{suffix}.txt"
-    return re.sub(r'[<>:"/\\|?*]', '', filename)  # Sanitize filename
+    return re.sub(r'[<>:"/\\|?*]', '', filename), suffix  # Sanitize filename
 
 def scrape_and_save_transcripts(link_dict):
     """Scrape debate transcripts and save them as text files."""
@@ -87,15 +95,18 @@ def scrape_and_save_transcripts(link_dict):
         paragraphs = content_div.find_all("p")
         text_content = "\n\n".join([p.get_text(strip=True) for p in paragraphs])
 
-        filename = format_filename(title, date)
+        filename, suffix = format_filename(title, date)
         if not filename:
             continue  
 
-        file_path = os.path.join(SAVE_DIR, filename)
+        # Save in presidential/ if it's a general election debate
+        folder_path = PRESIDENTIAL_DIR if suffix == "pd" else SAVE_DIR
+        file_path = os.path.join(folder_path, filename)
+
         with open(file_path, "w", encoding="utf-8") as file:
             file.write(text_content)
         
-        print(f"Saved: {filename}")
+        print(f"Saved: {file_path}")
 
 def main():
     """Main function to execute the script."""

@@ -1,48 +1,46 @@
 # Presidential Debate Hostility Analysis
 
-This repository contains a pipeline for scraping, processing, and analyzing presidential debate transcripts to compute hostility scores by year and party. The goal is to track trends in hostility and aggressive rhetoric over time in U.S. presidential debates.
+This repository aims to analyze how general sentiment and hostility in U.S. presidential debates have evolved over time. The analysis is divided into three major focuses:
 
-## Goal
-
-The goal of this project is to analyze hostility levels in U.S. presidential debates over time by:
-
-1. Scraping Transcripts: Retrieving debate transcripts from the UCSB Presidency Project.
-2. Processing Text: Identifying speakers, their party affiliation, and their statements. Text is split by sentence or by paragraph depending on the parameter provided.
-3. Calculating Hostility Scores: Using a pretrained model to compute hostility scores for each statement.
-4. Visualizing Trends: Aggregating scores by year and party to generate visualizations of hostility trends over time.
+1. **Sentiment and Hostility Analysis:** Utilizing fine-tuning techniques on Large Language Models (LLMs), particularly BERT-based models, to detect hostile language within presidential debates.
+2. **Temporal Analysis:** Examining how sentiment and hostility fluctuate over time, identifying trends and shifts in rhetorical tone across election cycles.
+3. **Topic-Specific Sentiment:** Identifying specific political topics that are more likely to involve hostile rhetoric and exploring the relationship between sentiment intensity and issue-based discussions.
 
 ## Scripts Breakdown
 
-### debate_scraper.py
-This script fetches debate transcripts from the UCSB website.
+The analysis pipeline is structured around three main Python scripts:
 
-- Retrieves debates from a list of URLs and saves them to the `data_script/` directory.
-- Outputs text files named according to their debate date and type:
+### 1. debate_scraper.py (Scraping)
+This script retrieves U.S. presidential debate transcripts from the UCSB Presidency Project website.
+
+- **Objective:** Download all available transcripts for general election debates.
+- **Output:** Raw text files saved in the `data_script/` directory.
+- **Format:** Files are named according to their debate date and type:
   - `pb`: Presidential debates
   - `vp`: Vice presidential debates
   - `rpd`: Republican debates
   - `dcd`: Democratic debates
 
-### debate_processing.py
-Processes debate transcripts by identifying speakers and their statements.
+### 2. debate_processing.py (Processing)
+Processes downloaded debate transcripts by identifying speakers, their party affiliation, and their statements.
 
-- Extracts statements by splitting by sentence or paragraph (controlled via a parameter `split_by_sentence`).
-- Identifies speakers and their political affiliations (Republican, Democrat, Moderator) using a dictionary of known speakers.
-- Saves processed results in `.csv` files:
-  - `debate_statements_with_party_by_sentence.csv` (if split by sentence)
-  - `debate_statements_with_party_by_statement.csv` (if split by paragraph)
+- **Objective:** Structure the raw debate text into identifiable statements by speakers, categorized by party.
+- **Approach:** 
+  - Uses a dictionary of known speakers for each debate.
+  - Applies sentence tokenization or paragraph processing based on the specified parameter.
+  - Identifies speakers’ political affiliation (Republican, Democrat, Moderator) using a pre-defined mapping.
+- **Output:** 
+  - `debate_statements_with_party_by_sentence.csv`: Processed data with statements split by sentence.
+  - `debate_statements_with_party_by_statement.csv`: Processed data with statements split by paragraph.
 
-#### Text Processing
+### 3. debate_hostility_analysis.py (Hostility Analysis)
+Performs the main analysis by computing hostility scores using pretrained NLP models.
 
-This is a simplified sentence tokenizer that ensures common abbreviations are not split mistakenly:
-```python
-def simple_sentence_tokenize(text):
-    if not text:
-        return []
-        
-    text = re.sub(r'(Mr\.|Mrs\.|Ms\.|Dr\.|Gov\.|Sen\.)\s', r'\1PLACEHOLDER', text)
-    sentences = re.split(r'(?<=[.!?])\s+', text)
-    sentences = [re.sub(r'PLACEHOLDER', ' ', s) for s in sentences]
-    return [s.strip() for s in sentences if s.strip()]
-
-
+- **Objective:** Compute hostility scores for each statement, aggregate them by year and party, and visualize trends over time.
+- **Approach:** 
+  - Loads a pretrained BERT-based model to compute hostility scores.
+  - Aggregates hostility scores by year and party.
+  - Plots the results to identify trends over election cycles.
+- **Output:** 
+  - `debate_hostility_scores.csv`: Contains aggregated hostility scores by year and party.
+  - Visualizations of hostility trends over time.

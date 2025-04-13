@@ -1,56 +1,25 @@
 import os
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-from matplotlib.ticker import MultipleLocator
 import seaborn as sns
 from transformers import pipeline
 from tqdm import tqdm
-
-# Set style for plots
-plt.style.use('seaborn-v0_8-whitegrid')
-sns.set_context("talk")
+from datetime import datetime
+import pathlib
 
 # Load the sentiment analysis model for hostility scoring
-# You can choose different models based on what you have access to
 def load_toxicity_model():
     """Load a pre-trained model for toxicity/hostility detection."""
-    print("Loading toxicity/hostility model...")
-    
-    # Option 1: RoBERTa-based toxicity model
+    print("Loading toxicity/hostility model...")   
     try:
         model_name = "unitary/unbiased-toxic-roberta"
         toxicity_pipeline = pipeline("text-classification", model=model_name)
         print(f"Loaded {model_name}")
         return toxicity_pipeline
     except Exception as e:
-        print(f"Failed to load primary model: {e}")
-        
-        # Option 2: Fallback to sentiment analysis
-        try:
-            model_name = "distilbert-base-uncased-finetuned-sst-2-english"
-            sentiment_pipeline = pipeline("sentiment-analysis", model=model_name)
-            print(f"Loaded fallback model: {model_name}")
+        print(f"Failed to load Unitary model: {e}")
+        raise RuntimeError("Could not load Unitary model for hostility analysis")
             
-            # Create a wrapper function to convert sentiment to toxicity scores
-            # (where negative sentiment is treated as higher hostility)
-            def sentiment_to_hostility(texts, **kwargs):
-                results = sentiment_pipeline(texts, **kwargs)
-                # Convert sentiment to hostility score (POSITIVE → low hostility, NEGATIVE → high hostility)
-                hostility_scores = []
-                for result in results:
-                    if result['label'] == 'NEGATIVE':
-                        hostility_scores.append({'score': result['score']})
-                    else:
-                        hostility_scores.append({'score': 1 - result['score']})
-                return hostility_scores
-            
-            return sentiment_to_hostility
-        except Exception as e:
-            print(f"Failed to load fallback model: {e}")
-            raise RuntimeError("Could not load any suitable model for hostility analysis")
-
 def compute_hostility_scores(df, model, batch_size=16):
     """
     Compute hostility scores for each statement in the dataframe.
@@ -115,118 +84,27 @@ def aggregate_hostility_by_year_party(df):
     
     return agg_df
 
-def plot_hostility_trends(agg_df, output_path='hostility_trends.png'):
+def main(statements_csv_path, folder_name=None, output_base_dir='./output'):
     """
-    Create a line plot showing hostility trends over time by party.
-    
-    Args:
-        agg_df: Aggregated DataFrame from aggregate_hostility_by_year_party
-        output_path: Path to save the plot
-    """
-    # Set figure size and style
-    plt.figure(figsize=(14, 8))
-    
-    # Define colors and labels for each party
-    party_colors = {
-        'republican': 'red',
-        'democrat': 'blue',
-        'moderator': 'gray'
-    }
-    
-    party_labels = {
-        'republican': 'Republican',
-        'democrat': 'Democrat',
-        'moderator': 'Moderator'
-    }
-    
-    # Get unique years for x-axis
-    years = sorted(agg_df['year'].unique())
-    
-    # Plot each party's trend
-    for party in ['democrat', 'republican', 'moderator']:
-        party_data = agg_df[agg_df['party'] == party]
-        
-        if len(party_data) > 0:
-            plt.plot(
-                party_data['year'], 
-                party_data['mean_hostility'],
-                marker='o',
-                markersize=8,
-                linewidth=2.5,
-                color=party_colors[party],
-                label=party_labels[party]
-            )
-            
-            # Add error bands (standard deviation)
-            plt.fill_between(
-                party_data['year'],
-                party_data['mean_hostility'] - party_data['std_hostility'],
-                party_data['mean_hostility'] + party_data['std_hostility'],
-                color=party_colors[party],
-                alpha=0.2
-            )
-    
-    # Add a trendline for overall hostility
-    overall_by_year = agg_df.groupby('year')['mean_hostility'].mean().reset_index()
-    plt.plot(
-        overall_by_year['year'],
-        overall_by_year['mean_hostility'],
-        color='black',
-        linestyle='--',
-        linewidth=1.5,
-        label='Overall Trend'
-    )
-    
-    # Customize the plot
-    plt.title('Hostility in Presidential Debates (1960-2024)', fontsize=20)
-    plt.xlabel('Year', fontsize=16)
-    plt.ylabel('Hostility Score', fontsize=16)
-    plt.grid(True, alpha=0.3)
-    plt.legend(fontsize=14)
-    
-    # Set x-axis to show every 4 years (election years)
-    min_year = min(years)
-    max_year = max(years)
-    plt.xticks(range(min_year, max_year + 1, 4), rotation=45)
-    
-    # Adjust y-axis to start from 0
-    plt.ylim(0, plt.ylim()[1])
-    
-    # Add annotations for key historical events/context
-    # (Optional, can be uncommented and customized)
-    """
-    annotations = {
-        1980: "First Reagan-Carter Debate",
-        2000: "Bush-Gore",
-        2016: "Trump-Clinton",
-        2020: "COVID Era\nTrump-Biden"
-    }
-    
-    for year, text in annotations.items():
-        if year in years:
-            y_pos = agg_df[agg_df['year'] == year]['mean_hostility'].mean()
-            plt.annotate(text, xy=(year, y_pos), xytext=(year-1, y_pos+0.1),
-                         arrowprops=dict(arrowstyle='->'), fontsize=12)
-    """
-    
-    # Tight layout and save
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    print(f"Plot saved to {output_path}")
-    
-    # Show plot
-    plt.show()
-
-def main(statements_csv_path, output_dir='./output'):
-    """
-    Main function to run the complete analysis pipeline.
+    Main function to run the analysis pipeline without plotting.
     
     Args:
         statements_csv_path: Path to the CSV file with debate statements
-        output_dir: Directory to save outputs
+        folder_name: Custom name for the output folder. If None, generates a name based on the input file.
+        output_base_dir: Base directory for all outputs
     """
-    # Create output directory if it doesn't exist
+    # Generate output directory name if not provided
+    if folder_name is None:
+        # Get the input filename without extension
+        input_file = pathlib.Path(statements_csv_path).stem
+        # Add timestamp for uniqueness
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        folder_name = f"{input_file}_{timestamp}"
+    
+    # Create complete output directory path
+    output_dir = os.path.join(output_base_dir, folder_name)
     os.makedirs(output_dir, exist_ok=True)
+    print(f"Output will be saved to: {output_dir}")
     
     # Load the statements data
     print(f"Loading statements from {statements_csv_path}")
@@ -249,7 +127,7 @@ def main(statements_csv_path, output_dir='./output'):
     df_with_scores = compute_hostility_scores(df, model)
     
     # Save detailed results
-    detailed_output_path = os.path.join(output_dir, 'debate_statements_with_hostility.csv')
+    detailed_output_path = os.path.join(output_dir, 'statements_with_hostility.csv')
     df_with_scores.to_csv(detailed_output_path, index=False)
     print(f"Saved detailed results to {detailed_output_path}")
     
@@ -262,14 +140,15 @@ def main(statements_csv_path, output_dir='./output'):
     agg_df.to_csv(agg_output_path, index=False)
     print(f"Saved aggregated results to {agg_output_path}")
     
-    # Plot the results
-    print("\nGenerating visualization...")
-    plot_path = os.path.join(output_dir, 'hostility_trends.png')
-    plot_hostility_trends(agg_df, plot_path)
+    print(f"\nAnalysis complete! Data saved to {output_dir}")
     
-    print("\nAnalysis complete!")
+    return output_dir  # Return the output directory path for reference
 
 if __name__ == "__main__":
-    # You can call the main function with your CSV path
-    # Example: main("debate_statements_with_party.csv")
+    # Examples of how to call the main function:
+    # 1. With automatic folder name generation:
+    # main("debate_statements_with_party.csv")
+    
+    # 2. With custom folder name:
+    # main("debate_statements_with_party.csv", folder_name="2020_debates_analysis")
     pass

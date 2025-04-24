@@ -7,3 +7,4 @@ output*/**/trainer_state.json
 output*/**/tokenizer.model
 *.pt
 *.bin
+*.tar.gz

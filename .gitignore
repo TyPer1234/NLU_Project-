@@ -1,0 +1,9 @@
+# Ignore large training artifacts
+output*/**/pytorch_model.bin
+output*/**/optimizer.pt
+output*/**/scheduler.pt
+output*/**/training_args.bin
+output*/**/trainer_state.json
+output*/**/tokenizer.model
+*.pt
+*.bin

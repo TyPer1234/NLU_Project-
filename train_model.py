@@ -2,7 +2,7 @@ import argparse
 import pandas as pd
 from datasets import Dataset
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments, BertForSequenceClassification, BertConfig
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
 import torch
 from transformers import EarlyStoppingCallback
 
@@ -33,7 +33,14 @@ def compute_metrics(eval_pred):
     logits, labels = eval_pred
     predictions = logits.argmax(axis=-1)
     acc = accuracy_score(labels, predictions)
-    return {"accuracy": acc}
+    precision = precision_score(labels, predictions, average="macro")
+    recall = recall_score(labels, predictions, average="macro")
+    f1 = f1_score(labels, predictions, average="macro")
+    return {
+        "accuracy": acc,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1}
 
 
 if __name__ == "__main__":
